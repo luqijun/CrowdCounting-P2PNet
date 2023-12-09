@@ -132,6 +132,8 @@ def main(args):
     data_loader_val = DataLoader(val_set, 1, sampler=sampler_val,
                                     drop_last=False, collate_fn=utils.collate_fn_crowd, num_workers=args.num_workers)
 
+    # fix bug: RuntimeError: received 0 items of ancdata
+    torch.multiprocessing.set_sharing_strategy('file_system')
     if args.frozen_weights is not None:
         checkpoint = torch.load(args.frozen_weights, map_location='cpu')
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
@@ -177,7 +179,7 @@ def main(args):
         # change lr according to the scheduler
         lr_scheduler.step()
         # save latest weights every epoch
-        checkpoint_latest_path = os.path.join(args.checkpoints_dir, 'latest.pth')
+        checkpoint_latest_path = os.path.join(args.checkpoints_dir, 'saved/latest.pth')
         torch.save({
             'model': model_without_ddp.state_dict(),
         }, checkpoint_latest_path)
@@ -200,14 +202,14 @@ def main(args):
             if writer is not None:
                 with open(run_log_name, "a") as log_file:
                     log_file.write("metric/mae@{}: {}".format(step, result[0]))
-                    log_file.write("metric/mse@{}: {}".format(step, result[1]))
+                    log_file.write("metric/mse@{}: {} \n".format(step, result[1]))
                 writer.add_scalar('metric/mae', result[0], step)
                 writer.add_scalar('metric/mse', result[1], step)
                 step += 1
 
             # save the best model since begining
             if abs(np.min(mae) - result[0]) < 0.01:
-                checkpoint_best_path = os.path.join(args.checkpoints_dir, 'best_mae.pth')
+                checkpoint_best_path = os.path.join(args.checkpoints_dir, 'saved/best_mae.pth')
                 torch.save({
                     'model': model_without_ddp.state_dict(),
                 }, checkpoint_best_path)
