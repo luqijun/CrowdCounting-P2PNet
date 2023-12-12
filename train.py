@@ -69,6 +69,7 @@ def get_args_parser():
                         help='start epoch')
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--num_workers', default=8, type=int)
+    parser.add_argument('--eval_start', default=500, type=int)
     parser.add_argument('--eval_freq', default=5, type=int,
                         help='frequency of evaluation, default setting is evaluating in every 5 epoch')
     parser.add_argument('--gpu_id', default=0, type=int, help='the gpu used for training')
@@ -78,7 +79,10 @@ def get_args_parser():
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = '{}'.format(args.gpu_id)
     # create the logging file
-    run_log_name = os.path.join(args.output_dir, 'run_log.txt')
+    sub_dir = datetime.datetime.strftime(datetime.datetime.now(), '%m%d-%H%M%S')  # prepare saving path
+    log_dir = os.path.join(args.output_dir, sub_dir)
+    os.makedirs(log_dir)
+    run_log_name = os.path.join(log_dir, 'run_log.txt')
     with open(run_log_name, "w") as log_file:
         log_file.write('Eval Log %s\n' % time.strftime("%c"))
 
@@ -87,7 +91,9 @@ def main(args):
     # backup the arguments
     print(args)
     with open(run_log_name, "a") as log_file:
-        log_file.write("{}".format(args))
+        # log_file.write("{}\n".format(args))
+        for k, v in args.__dict__.items():  # save args
+            log_file.write("{}: {} \n".format(k, v))
     device = torch.device('cuda')
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
@@ -152,8 +158,10 @@ def main(args):
     mae = []
     mse = []
     # the logger writer
-    writer = SummaryWriter(args.tensorboard_dir)
-    
+    writer = SummaryWriter(log_dir)
+
+    best_mae = 1e9
+    best_epoch = 0
     step = 0
     # training starts here
     for epoch in range(args.start_epoch, args.epochs):
@@ -162,20 +170,22 @@ def main(args):
             model, criterion, data_loader_train, optimizer, device, epoch,
             args.clip_max_norm)
 
-        # record the training states after every epoch
-        if writer is not None:
-            with open(run_log_name, "a") as log_file:
-                log_file.write("loss/loss@{}: {}".format(epoch, stat['loss']))
-                log_file.write("loss/loss_ce@{}: {}".format(epoch, stat['loss_ce']))
-                
-            writer.add_scalar('loss/loss', stat['loss'], epoch)
-            writer.add_scalar('loss/loss_ce', stat['loss_ce'], epoch)
-
         t2 = time.time()
         print('[ep %d][lr %.7f][%.2fs]' % \
               (epoch, optimizer.param_groups[0]['lr'], t2 - t1))
         with open(run_log_name, "a") as log_file:
             log_file.write('[ep %d][lr %.7f][%.2fs]' % (epoch, optimizer.param_groups[0]['lr'], t2 - t1))
+
+        # record the training states after every epoch
+        if writer is not None:
+            with open(run_log_name, "a") as log_file:
+                log_file.write("loss/loss@{}: {}".format(epoch, stat['loss']))
+                log_file.write("loss/loss_ce@{}: {}\n".format(epoch, stat['loss_ce']))
+                
+            writer.add_scalar('loss/loss', stat['loss'], epoch)
+            writer.add_scalar('loss/loss_ce', stat['loss_ce'], epoch)
+
+
         # change lr according to the scheduler
         lr_scheduler.step()
         # save latest weights every epoch
@@ -184,19 +194,24 @@ def main(args):
             'model': model_without_ddp.state_dict(),
         }, checkpoint_latest_path)
         # run evaluation
-        if epoch % args.eval_freq == 0 and epoch != 0:
+        if epoch > args.eval_start and epoch % args.eval_freq == 0 and epoch != 0:
             t1 = time.time()
             result = evaluate_crowd_no_overlap(model, data_loader_val, device)
             t2 = time.time()
 
             mae.append(result[0])
             mse.append(result[1])
+
+            if result[0] < best_mae:
+                best_mae = result[0]
+                best_epoch = epoch
+
             # print the evaluation results
             print('=======================================test=======================================')
-            print("mae:", result[0], "mse:", result[1], "time:", t2 - t1, "best mae:", np.min(mae), )
+            print("val-- ", "mae:", result[0], "mse:", result[1], "time:", t2 - t1, "best mae:", best_mae, "best epoch:", best_epoch,)
             with open(run_log_name, "a") as log_file:
-                log_file.write("mae:{}, mse:{}, time:{}, best mae:{}".format(result[0], 
-                                result[1], t2 - t1, np.min(mae)))
+                log_file.write("val-- mae:{}, mse:{}, time:{}, best mae:{}, best epoch:{} \n".format(result[0],
+                                result[1], t2 - t1, best_mae, best_epoch))
             print('=======================================test=======================================')
             # recored the evaluation results
             if writer is not None:
