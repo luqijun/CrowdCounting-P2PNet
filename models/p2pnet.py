@@ -222,8 +222,26 @@ class P2PNet(nn.Module):
         # decode the points as prediction
         output_coord = regression + anchor_points
         output_class = classification
-        out = {'pred_logits': output_class, 'pred_points': output_coord}
+        out = {'pred_logits': output_class, 'pred_points': output_coord, 'anchor_points': anchor_points}
        
+        return out
+
+    def forward_old(self, samples: NestedTensor):
+        # get the backbone features
+        features = self.backbone(samples)
+        # forward the feature pyramid
+        features_fpn = self.fpn([features[1], features[2], features[3]])
+
+        batch_size = features[0].shape[0]
+        # run the regression and classification branch
+        regression = self.regression(features_fpn[1]) * 100  # 8x
+        classification = self.classification(features_fpn[1])
+        anchor_points = self.anchor_points(samples).repeat(batch_size, 1, 1)
+        # decode the points as prediction
+        output_coord = regression + anchor_points
+        output_class = classification
+        out = {'pred_logits': output_class, 'pred_points': output_coord}
+
         return out
 
 class SetCriterion_Crowd(nn.Module):
@@ -306,7 +324,7 @@ class SetCriterion_Crowd(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-        output1 = {'pred_logits': outputs['pred_logits'], 'pred_points': outputs['pred_points']}
+        output1 = {'pred_logits': outputs['pred_logits'], 'pred_points': outputs['pred_points'], 'anchor_points': outputs['anchor_points']}
 
         indices1 = self.matcher(output1, targets)
 
