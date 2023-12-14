@@ -35,6 +35,8 @@ def get_args_parser():
                         help="Name of the convolutional backbone to use")
 
     # * Matcher
+    parser.add_argument('--match_type', default='all', type=str,
+                        help="Class coefficient in the matching cost")
     parser.add_argument('--set_cost_class', default=1, type=float,
                         help="Class coefficient in the matching cost")
 
