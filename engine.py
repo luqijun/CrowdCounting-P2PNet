@@ -130,7 +130,8 @@ def evaluate_crowd_no_overlap(model, data_loader, device, vis_dir=None):
     # run inference on all images to calc MAE
     maes = []
     mses = []
-    for samples, targets in data_loader:
+    vis_interval = 30
+    for iter, (samples, targets) in enumerate(data_loader):
         samples = samples.to(device)
 
         outputs = model(samples)
@@ -145,7 +146,7 @@ def evaluate_crowd_no_overlap(model, data_loader, device, vis_dir=None):
         points = outputs_points[outputs_scores > threshold].detach().cpu().numpy().tolist()
         predict_cnt = int((outputs_scores > threshold).sum())
         # if specified, save the visualized images
-        if vis_dir is not None: 
+        if vis_dir is not None and iter % vis_interval == 0:
             vis(samples, targets, [points], vis_dir)
         # accumulate MAE, MSE
         mae = abs(predict_cnt - gt_cnt)

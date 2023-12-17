@@ -60,6 +60,8 @@ def get_args_parser():
     
     parser.add_argument('--output_dir', default='./log',
                         help='path where to save, empty for no saving')
+    parser.add_argument('--vis_dir', default='',
+                        help='path where to save vis images, empty for no saving')
     parser.add_argument('--checkpoints_dir', default='./ckpt',
                         help='path where to save checkpoints, empty for no saving')
     parser.add_argument('--tensorboard_dir', default='./runs',
@@ -83,7 +85,12 @@ def main(args):
     # create the logging file
     sub_dir = datetime.datetime.strftime(datetime.datetime.now(), '%m%d-%H%M%S')  # prepare saving path
     log_dir = os.path.join(args.output_dir, sub_dir)
-    os.makedirs(log_dir)
+    os.makedirs(log_dir, exist_ok=True)
+    vis_dir = None
+    if args.vis_dir:
+        vis_dir = os.path.join(log_dir, args.vis_dir)
+        os.makedirs(vis_dir, exist_ok=True)
+
     run_log_name = os.path.join(log_dir, 'run_log.txt')
     with open(run_log_name, "w") as log_file:
         log_file.write('Eval Log %s\n' % time.strftime("%c"))
@@ -198,7 +205,7 @@ def main(args):
         # run evaluation
         if epoch > args.eval_start and epoch % args.eval_freq == 0 and epoch != 0:
             t1 = time.time()
-            result = evaluate_crowd_no_overlap(model, data_loader_val, device)
+            result = evaluate_crowd_no_overlap(model, data_loader_val, device, vis_dir)
             t2 = time.time()
 
             mae.append(result[0])
