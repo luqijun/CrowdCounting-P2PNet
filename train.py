@@ -32,7 +32,12 @@ def get_args_parser():
 
     # * Backbone
     parser.add_argument('--backbone', default='vgg16_bn', type=str,
-                        help="Name of the convolutional backbone to use")
+                        help="Name of the convolutional backbone to use: vgg16_bn | vgg16 | dla_34")
+    parser.add_argument('--head_conv', type=int, default=-1,
+                        help='conv layer channels for output head'
+                             '0 for no conv layer'
+                             '-1 for default setting: '
+                             '64 for resnets and 256 for dla.')
 
     # * Matcher
     parser.add_argument('--set_cost_class', default=1, type=float,

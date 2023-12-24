@@ -6,7 +6,7 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, interpolate,
                        is_dist_avail_and_initialized)
 
-from .backbone import build_backbone
+from .backones.build import build_backbone
 from .matcher import build_matcher_crowd
 
 import numpy as np
@@ -192,8 +192,9 @@ class Decoder(nn.Module):
 
 # the defenition of the P2PNet model
 class P2PNet(nn.Module):
-    def __init__(self, backbone, row=2, line=2):
+    def __init__(self, backbone, row=2, line=2, args=None):
         super().__init__()
+        self.args = args
         self.backbone = backbone
         self.num_classes = 2
         # the number of all anchor points
@@ -209,15 +210,24 @@ class P2PNet(nn.Module):
         self.fpn = Decoder(256, 512, 512)
 
     def forward(self, samples: NestedTensor):
-        # get the backbone features
-        features = self.backbone(samples)
-        # forward the feature pyramid
-        features_fpn = self.fpn([features[1], features[2], features[3]])
 
-        batch_size = features[0].shape[0]
+        down_features = None
+        if self.args.backbone == 'vgg16':
+            # get the backbone features
+            features = self.backbone(samples)
+            # forward the feature pyramid
+            features_fpn = self.fpn([features[1], features[2], features[3]])
+            down_features = features_fpn[1]
+            batch_size = features[0].shape[0]
+        else:
+            # get the backbone features
+            features = self.backbone(samples)[0]['head']
+            down_features = features
+            batch_size = features.shape[0]
+
         # run the regression and classification branch
-        regression = self.regression(features_fpn[1]) * 100 # 8x
-        classification = self.classification(features_fpn[1])
+        regression = self.regression(down_features) * 100 # 8x
+        classification = self.classification(down_features)
         anchor_points = self.anchor_points(samples).repeat(batch_size, 1, 1)
         # decode the points as prediction
         output_coord = regression + anchor_points
@@ -328,7 +338,7 @@ def build(args, training):
     num_classes = 1
 
     backbone = build_backbone(args)
-    model = P2PNet(backbone, args.row, args.line)
+    model = P2PNet(backbone, args.row, args.line, args)
     if not training: 
         return model
 

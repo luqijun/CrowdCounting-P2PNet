@@ -2,14 +2,11 @@
 """
 Backbone modules.
 """
-from collections import OrderedDict
 
-import torch
-import torch.nn.functional as F
-import torchvision
 from torch import nn
 
-import models.vgg_ as models
+import models.backones.vgg.vgg_ as models
+
 
 class BackboneBase_VGG(nn.Module):
     def __init__(self, backbone: nn.Module, num_channels: int, name: str, return_interm_layers: bool):
@@ -60,9 +57,10 @@ class Backbone_VGG(BackboneBase_VGG):
         super().__init__(backbone, num_channels, name, return_interm_layers)
 
 
-def build_backbone(args):
+def get_vgg16_net(args):
     backbone = Backbone_VGG(args.backbone, True)
     return backbone
+
 
 if __name__ == '__main__':
     Backbone_VGG('vgg16', True)
