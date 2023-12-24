@@ -8,6 +8,9 @@ CUDA_VISIBLE_DEVICES=0 python train.py --data_root /mnt/d/MyDocs/Datasets/Shangh
     --lr 0.0001 \
     --lr_backbone 0.00001 \
     --batch_size 8 \
-    --eval_start 350 \
+    --match_type anchor_points \
+    --set_cost_class 1.0 \
+    --set_cost_point 0.05 \
+    --eval_start 300 \
     --eval_freq 1 \
     --gpu_id 0
