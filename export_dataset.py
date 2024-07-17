@@ -43,16 +43,14 @@ def export_dataset(root_path, part_name, output_path):
             gt = get_points(root_path, gt_path)
 
             # for each image, generate a txt file with annotations
-            new_labels_file = os.path.join(output_path, sub_path,
-os.path.basename(image_path).replace('jpg', 'txt'))
+            new_labels_file = os.path.join(output_path, sub_path, os.path.basename(image_path).replace('jpg', 'txt'))
             with open(new_labels_file, 'w') as fp:
                 for p in gt:
                     fp.write('{} {}\n'.format(p[0], p[1]))
             list_file.append((image_path, new_labels_file))
 
         # generate file with listing
-        with open(os.path.join(output_path, part_folder,
-'{}.list'.format(split)), 'w') as fp:
+        with open(os.path.join(output_path, part_folder, '{}.list'.format(split)), 'w') as fp:
             for item in list_file:
                 fp.write('{} {}\n'.format(item[0], item[1]))
 

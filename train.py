@@ -32,7 +32,12 @@ def get_args_parser():
 
     # * Backbone
     parser.add_argument('--backbone', default='vgg16_bn', type=str,
-                        help="Name of the convolutional backbone to use")
+                        help="Name of the convolutional backbone to use: vgg16_bn | vgg16 | dla_34")
+    parser.add_argument('--head_conv', type=int, default=-1,
+                        help='conv layer channels for output head'
+                             '0 for no conv layer'
+                             '-1 for default setting: '
+                             '64 for resnets and 256 for dla.')
 
     # * Matcher
     parser.add_argument('--match_type', default='all', type=str,
@@ -152,6 +157,11 @@ def main(args):
     if args.frozen_weights is not None:
         checkpoint = torch.load(args.frozen_weights, map_location='cpu')
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
+
+    best_mae = 1e9
+    best_epoch = 0
+    step = 0
+
     # resume the weights and training state if exists
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -159,7 +169,10 @@ def main(args):
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            step = checkpoint['step']
             args.start_epoch = checkpoint['epoch'] + 1
+            best_mae = checkpoint['best_mae']
+            best_epoch = checkpoint['best_epoch']
 
     print("Start training")
     start_time = time.time()
@@ -169,9 +182,7 @@ def main(args):
     # the logger writer
     writer = SummaryWriter(log_dir)
 
-    best_mae = 1e9
-    best_epoch = 0
-    step = 0
+
     # training starts here
     for epoch in range(args.start_epoch, args.epochs):
         t1 = time.time()
@@ -197,11 +208,7 @@ def main(args):
 
         # change lr according to the scheduler
         lr_scheduler.step()
-        # save latest weights every epoch
-        checkpoint_latest_path = os.path.join(args.checkpoints_dir, 'saved/latest.pth')
-        torch.save({
-            'model': model_without_ddp.state_dict(),
-        }, checkpoint_latest_path)
+
         # run evaluation
         if epoch > args.eval_start and epoch % args.eval_freq == 0 and epoch != 0:
             t1 = time.time()
@@ -233,10 +240,23 @@ def main(args):
 
             # save the best model since begining
             if abs(np.min(mae) - result[0]) < 0.01:
-                checkpoint_best_path = os.path.join(args.checkpoints_dir, 'saved/best_mae.pth')
+                checkpoint_best_path = os.path.join(log_dir, 'best_mae.pth')
                 torch.save({
                     'model': model_without_ddp.state_dict(),
                 }, checkpoint_best_path)
+
+        # save latest weights every epoch
+        checkpoint_latest_path = os.path.join(log_dir, 'latest.pth')
+        torch.save({
+            'model': model_without_ddp.state_dict(),
+            'optimizer':optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'step': step,
+            'epoch': epoch,
+            'best_mae': best_mae,
+            'best_epoch': best_epoch
+        }, checkpoint_latest_path)
+
     # total time for training
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
