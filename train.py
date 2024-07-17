@@ -31,6 +31,8 @@ def get_args_parser():
                         help="Path to the pretrained model. If set, only the mask head will be trained")
 
     # * Backbone
+    parser.add_argument('--arch', default='p2pnet', type=str,
+                        help="Name of the arch: p2pnet | ffnet")
     parser.add_argument('--backbone', default='vgg16_bn', type=str,
                         help="Name of the convolutional backbone to use: vgg16_bn | vgg16 | dla_34")
     parser.add_argument('--head_conv', type=int, default=-1,
@@ -85,6 +87,16 @@ def get_args_parser():
 
     return parser
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed) # CPU
+    torch.cuda.manual_seed(seed) # GPU
+    torch.cuda.manual_seed_all(seed) # All GPU
+    os.environ['PYTHONHASHSEED'] = str(seed) # 禁止hash随机化
+    torch.backends.cudnn.deterministic = True # 确保每次返回的卷积算法是确定的
+    torch.backends.cudnn.benchmark = False # True的话会自动寻找最适合当前配置的高效算法，来达到优化运行效率的问题。False保证实验结果可
+
 def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = '{}'.format(args.gpu_id)
     # create the logging file
@@ -111,9 +123,7 @@ def main(args):
     device = torch.device('cuda')
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    set_seed(seed)
     # get the P2PNet model
     model, criterion = build_model(args, training=True)
     # move to GPU
