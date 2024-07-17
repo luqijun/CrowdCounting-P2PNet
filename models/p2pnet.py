@@ -212,7 +212,7 @@ class P2PNet(nn.Module):
     def forward(self, samples: NestedTensor):
 
         down_features = None
-        if self.args.backbone == 'vgg16':
+        if self.args.backbone == 'vgg16' or self.args.backbone == 'vgg16_bn':
             # get the backbone features
             features = self.backbone(samples)
             # forward the feature pyramid
