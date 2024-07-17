@@ -1,7 +1,7 @@
 CUDA_VISIBLE_DEVICES=0 python train.py --data_root /mnt/e/MyDocs/Code/Datasets/ShangHaiTech/ShanghaiTech_P2PNet \
     --dataset_file SHHA \
     --backbone dla_34 \
-    --epochs 1500 \
+    --epochs 500 \
     --lr_drop 3500 \
     --output_dir ./logs \
     --checkpoints_dir ./weights \
@@ -9,5 +9,6 @@ CUDA_VISIBLE_DEVICES=0 python train.py --data_root /mnt/e/MyDocs/Code/Datasets/S
     --lr 0.0001 \
     --lr_backbone 0.00001 \
     --batch_size 8 \
+    --eval_start 30 \
     --eval_freq 1 \
     --gpu_id 0
