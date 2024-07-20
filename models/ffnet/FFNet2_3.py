@@ -9,7 +9,7 @@ from models.ffnet.ODConv2d import ODConv2d
 from ..backbone import build_backbone
 from ..matcher import build_matcher_crowd
 from ..loss import SetCriterion_Crowd
-from ..layers import RegressionModel, ClassificationModel, AnchorPoints
+from ..layers import RegressionModel, ClassificationModel, AnchorPoints1, Segmentation_Head
 
 __all__ = ['FFNet']
 
@@ -78,18 +78,19 @@ class Backbone(nn.Module):
         self.stem = nn.Sequential(*feats[0:2])
         self.stage1 = nn.Sequential(*feats[2:4])
         self.stage2 = nn.Sequential(*feats[4:6])
-        self.stage3 = nn.Sequential(*feats[6:12])
+        # self.stage3 = nn.Sequential(*feats[6:12])
         
     def forward(self, x):
         x = x.float()
         x = self.stem(x)
+        feature0 = x
         x = self.stage1(x)
         feature1 = x
         x = self.stage2(x)
         feature2 = x
-        x = self.stage3(x)
+        # x = self.stage3(x)
         
-        return feature1, feature2, x
+        return feature0, feature1, feature2
 
 class ccsm(nn.Module):
     def __init__(self, channel, channel2, num_filters):
@@ -132,50 +133,64 @@ class ccsm(nn.Module):
 class Fusion(nn.Module):
     def __init__(self, num_filters1, num_filters2, num_filters3, out_channels=1):
         super(Fusion, self).__init__()
-        self.upsample_1 = nn.ConvTranspose2d(in_channels=num_filters2, out_channels=num_filters2, kernel_size=4, padding=1, stride=2)
-        self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=0, stride=4)
+        self.down_sample = nn.MaxPool2d(kernel_size=2, stride=2)
+        # self.upsample_1 = nn.ConvTranspose2d(in_channels=num_filters2, out_channels=num_filters2, kernel_size=4, padding=1, stride=2)
+        # self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=0, stride=4)
+        self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=1, stride=2)
         self.final = nn.Sequential(
             nn.Conv2d(num_filters1+num_filters2+num_filters3, out_channels, kernel_size=1, padding=0),
             nn.ReLU(),
         )
         
     def forward(self, x1, x2, x3):
-        x2 = self.upsample_1(x2)
+        x1 = self.down_sample(x1)
+        # x2 = self.upsample_1(x2)
+        # x3 = self.upsample_2(x3)
         x3 = self.upsample_2(x3)
 
         x = torch.cat([x1, x2, x3], dim=1)
         x = self.final(x)
         
         return x
-    
-class FFNet(nn.Module):
+
+
+
+
+class FFNet2_3(nn.Module):
     def __init__(self):
         super().__init__()
         out_channels = 16 + 32 + 64
         num_filters = [16, 32, 64]
         self.backbone = Backbone()
-        self.ccsm1 = ccsm(192, 96, num_filters[0])
-        self.ccsm2 = ccsm(384, 192, num_filters[1])
-        self.ccsm3 = ccsm(768, 384, num_filters[2])
+
+        self.seg_head = Segmentation_Head(in_channels=[384, 192, 96])
+
+        self.ccsm1 = ccsm(96, 38, num_filters[0])
+        self.ccsm2 = ccsm(192, 96, num_filters[1])
+        self.ccsm3 = ccsm(384, 192, num_filters[2])
         self.fusion = Fusion(num_filters[0], num_filters[1], num_filters[2], out_channels=out_channels)
 
-        row = 2
-        line = 2
         self.num_classes = 2
         # the number of all anchor points
-        num_anchor_points = row * line
+        self.num_anchor_points_list = [4, 1]
 
-        self.regression = RegressionModel(num_features_in=out_channels, num_anchor_points_list=num_anchor_points)
+        self.anchor_points = AnchorPoints1(pyramid_levels=[3,], row_lines=[(2, 2), (1, 1)])
+
+        self.regression = RegressionModel(num_features_in=out_channels, num_anchor_points_list=self.num_anchor_points_list)
         self.classification = ClassificationModel(num_features_in=out_channels, \
                                                   num_classes=self.num_classes, \
-                                                  num_anchor_points=num_anchor_points)
-
-        self.anchor_points = AnchorPoints(pyramid_levels=[3, ], row=row, line=line)
+                                                  num_anchor_points_list=self.num_anchor_points_list)
 
 
     def forward(self, x):
         pool1, pool2, pool3 = self.backbone(x)
-        
+
+        pred_seg_map = self.seg_head(pool1, pool2, pool3)
+        seg_attention = pred_seg_map.sigmoid()
+        pool1 = pool1 * F.interpolate(seg_attention, size=pool1.shape[-2:])
+        pool2 = pool2 * F.interpolate(seg_attention, size=pool2.shape[-2:])
+        pool3 = pool3 * F.interpolate(seg_attention, size=pool3.shape[-2:])
+
         pool1 = self.ccsm1(pool1)
         pool2 = self.ccsm2(pool2)
         pool3 = self.ccsm3(pool3)
@@ -189,28 +204,28 @@ class FFNet(nn.Module):
         # decode the points as prediction
         output_coord = regression + anchor_points
         output_class = classification
-        out = {'pred_logits': output_class, 'pred_points': output_coord, 'anchor_points': anchor_points}
+
+        out = {
+            'pred_logits': output_class,
+            'pred_points': output_coord,
+            'anchor_points': anchor_points,
+            'pred_seg_map': pred_seg_map
+        }
 
         return out
- 
-        # B, C, H, W = x.size()
-        # x_sum = x.view([B, -1]).sum(1).unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        # x_normed = x / (x_sum + 1e-6)
-        #
-        # return x, x_normed
 
 
-def build_ffnet(args, training):
+def build_ffnet2_3(args, training):
 
     # treats persons as a single class
     num_classes = 1
 
-    model = FFNet()
+    model = FFNet2_3()
     if not training:
         return model
 
-    weight_dict = {'loss_ce': 1, 'loss_points': args.point_loss_coef}
-    losses = ['labels', 'points']
+    weight_dict = {'loss_ce': 1, 'loss_points': args.point_loss_coef, 'loss_seg_head': 0.1}
+    losses = ['labels', 'points', 'seg_head']
     matcher = build_matcher_crowd(args)
     criterion = SetCriterion_Crowd(num_classes, \
                                 matcher=matcher, weight_dict=weight_dict, \
@@ -222,7 +237,7 @@ def build_ffnet(args, training):
 
 if __name__ == '__main__':
     x = torch.rand(size=(16, 3, 512, 512), dtype=torch.float32)
-    model = FFNet()
+    model = FFNet2_3()
     
     mu, mu_norm = model(x)
     print(mu.size(), mu_norm.size())

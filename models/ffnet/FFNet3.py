@@ -78,18 +78,19 @@ class Backbone(nn.Module):
         self.stem = nn.Sequential(*feats[0:2])
         self.stage1 = nn.Sequential(*feats[2:4])
         self.stage2 = nn.Sequential(*feats[4:6])
-        self.stage3 = nn.Sequential(*feats[6:12])
+        # self.stage3 = nn.Sequential(*feats[6:12])
         
     def forward(self, x):
         x = x.float()
         x = self.stem(x)
+        feature0 = x
         x = self.stage1(x)
         feature1 = x
         x = self.stage2(x)
         feature2 = x
-        x = self.stage3(x)
+        # x = self.stage3(x)
         
-        return feature1, feature2, x
+        return feature0, feature1, feature2
 
 class ccsm(nn.Module):
     def __init__(self, channel, channel2, num_filters):
@@ -132,31 +133,35 @@ class ccsm(nn.Module):
 class Fusion(nn.Module):
     def __init__(self, num_filters1, num_filters2, num_filters3, out_channels=1):
         super(Fusion, self).__init__()
-        self.upsample_1 = nn.ConvTranspose2d(in_channels=num_filters2, out_channels=num_filters2, kernel_size=4, padding=1, stride=2)
-        self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=0, stride=4)
+        self.down_sample = nn.MaxPool2d(kernel_size=2, stride=2)
+        # self.upsample_1 = nn.ConvTranspose2d(in_channels=num_filters2, out_channels=num_filters2, kernel_size=4, padding=1, stride=2)
+        # self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=0, stride=4)
+        self.upsample_2 = nn.ConvTranspose2d(in_channels=num_filters3, out_channels=num_filters3, kernel_size=4, padding=1, stride=2)
         self.final = nn.Sequential(
-            nn.Conv2d(num_filters1+num_filters2+num_filters3, out_channels, kernel_size=1, padding=0),
+            nn.Conv2d(num_filters2+num_filters3, out_channels, kernel_size=1, padding=0),
             nn.ReLU(),
         )
         
     def forward(self, x1, x2, x3):
-        x2 = self.upsample_1(x2)
+        # x1 = self.down_sample(x1)
+        # x2 = self.upsample_1(x2)
+        # x3 = self.upsample_2(x3)
         x3 = self.upsample_2(x3)
 
-        x = torch.cat([x1, x2, x3], dim=1)
+        x = torch.cat([x2, x3], dim=1)
         x = self.final(x)
         
         return x
     
-class FFNet(nn.Module):
+class FFNet3(nn.Module):
     def __init__(self):
         super().__init__()
         out_channels = 16 + 32 + 64
         num_filters = [16, 32, 64]
         self.backbone = Backbone()
-        self.ccsm1 = ccsm(192, 96, num_filters[0])
-        self.ccsm2 = ccsm(384, 192, num_filters[1])
-        self.ccsm3 = ccsm(768, 384, num_filters[2])
+        self.ccsm1 = ccsm(96, 38, num_filters[0])
+        self.ccsm2 = ccsm(192, 96, num_filters[1])
+        self.ccsm3 = ccsm(384, 192, num_filters[2])
         self.fusion = Fusion(num_filters[0], num_filters[1], num_filters[2], out_channels=out_channels)
 
         row = 2
@@ -200,12 +205,12 @@ class FFNet(nn.Module):
         # return x, x_normed
 
 
-def build_ffnet(args, training):
+def build_ffnet3(args, training):
 
     # treats persons as a single class
     num_classes = 1
 
-    model = FFNet()
+    model = FFNet3()
     if not training:
         return model
 
@@ -222,7 +227,7 @@ def build_ffnet(args, training):
 
 if __name__ == '__main__':
     x = torch.rand(size=(16, 3, 512, 512), dtype=torch.float32)
-    model = FFNet()
+    model = FFNet3()
     
     mu, mu_norm = model(x)
     print(mu.size(), mu_norm.size())
