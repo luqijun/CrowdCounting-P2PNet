@@ -145,10 +145,10 @@ def main(args):
     # Adam is used by default
     optimizer = torch.optim.Adam(param_dicts, lr=args.lr)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
-    # create the dataset
-    loading_data = build_dataset(args=args)
+
     # create the training and valiation set
-    train_set, val_set = loading_data(args.data_root)
+    train_set, val_set = build_dataset(args=args)
+
     # create the sampler used during training
     sampler_train = torch.utils.data.RandomSampler(train_set)
     sampler_val = torch.utils.data.SequentialSampler(val_set)
@@ -209,11 +209,15 @@ def main(args):
         # record the training states after every epoch
         if writer is not None:
             with open(run_log_name, "a") as log_file:
-                log_file.write("loss/loss@{}: {}".format(epoch, stat['loss']))
-                log_file.write("loss/loss_ce@{}: {}\n".format(epoch, stat['loss_ce']))
-                
+                log_file.write("loss@{}: {}".format(epoch, stat['loss']))
+                log_file.write("loss_ce@{}: {}\n".format(epoch, stat['loss_ce']))
+                log_file.write("loss_points@{}: {}\n".format(epoch, stat['loss_points']))
+                log_file.write("loss_seg_head@{}: {}\n".format(epoch, stat['loss_seg_head']))
+
             writer.add_scalar('loss/loss', stat['loss'], epoch)
             writer.add_scalar('loss/loss_ce', stat['loss_ce'], epoch)
+            writer.add_scalar('loss/loss_points', stat['loss_points'], epoch)
+            writer.add_scalar('loss/loss_seg_head', stat['loss_seg_head'], epoch)
 
 
         # change lr according to the scheduler

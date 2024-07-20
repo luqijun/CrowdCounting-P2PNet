@@ -61,6 +61,18 @@ class SetCriterion_Crowd(nn.Module):
 
         return losses
 
+    def loss_seg_head(self, outputs, targets, indices, num_points, **kwargs):
+        assert 'pred_seg_map' in outputs
+        src_seg_map = outputs['pred_seg_map']
+        idx = self._get_src_permutation_idx(indices)
+        gt_seg_map = torch.stack([tgt['seg_map'] for tgt in targets], dim=0)
+        gt_seg_map = F.interpolate(gt_seg_map, size=src_seg_map.shape[-2:])
+        raw_ce_seg_head_loss = F.binary_cross_entropy_with_logits(src_seg_map, gt_seg_map, reduction='none')
+        loss_ce_seg_head = raw_ce_seg_head_loss.mean()
+
+        losses = {'loss_seg_head': loss_ce_seg_head}
+        return losses
+
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
@@ -77,6 +89,7 @@ class SetCriterion_Crowd(nn.Module):
         loss_map = {
             'labels': self.loss_labels,
             'points': self.loss_points,
+            'seg_head': self.loss_seg_head
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_points, **kwargs)
@@ -88,7 +101,12 @@ class SetCriterion_Crowd(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-        output1 = {'pred_logits': outputs['pred_logits'], 'pred_points': outputs['pred_points'], 'anchor_points': outputs['anchor_points']}
+        output1 = {
+            'pred_logits': outputs['pred_logits'],
+            'pred_points': outputs['pred_points'],
+            'anchor_points': outputs['anchor_points'],
+            'pred_seg_map': outputs['pred_seg_map']
+        }
 
         indices1 = self.matcher(output1, targets)
 
