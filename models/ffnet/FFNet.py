@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.nn import Conv2d
 import torch.nn.functional as F
 from models.ffnet.ODConv2d import ODConv2d
+from util.misc import NestedTensor
 
 from ..backbone import build_backbone
 from ..matcher import build_matcher_crowd
@@ -173,7 +174,8 @@ class FFNet(nn.Module):
         self.anchor_points = AnchorPoints(pyramid_levels=[3, ], row=row, line=line)
 
 
-    def forward(self, x):
+    def forward(self, samples: NestedTensor):
+        x = samples.tensors
         pool1, pool2, pool3 = self.backbone(x)
         
         pool1 = self.ccsm1(pool1)

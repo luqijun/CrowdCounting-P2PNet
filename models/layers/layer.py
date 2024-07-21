@@ -22,7 +22,7 @@ class RegressionModel(nn.Module):
         self.act4 = nn.ReLU()
 
         self.num_anchor_points_list = num_anchor_points_list
-        num_anchor_points = sum(self.num_anchor_points_list)
+        num_anchor_points = sum(self.num_anchor_points_list) if isinstance(num_anchor_points_list, list) else self.num_anchor_points_list
         self.output = nn.Conv2d(feature_size, num_anchor_points * 2, kernel_size=3, padding=1)
     # sub-branch forward
     def forward(self, x):
@@ -58,7 +58,7 @@ class ClassificationModel(nn.Module):
         self.act4 = nn.ReLU()
 
         self.num_anchor_points_list = num_anchor_points_list
-        num_anchor_points = sum(self.num_anchor_points_list)
+        num_anchor_points = sum(self.num_anchor_points_list) if isinstance(num_anchor_points_list, list) else self.num_anchor_points_list
         self.output = nn.Conv2d(feature_size, num_anchor_points * num_classes, kernel_size=3, padding=1)
         self.output_act = nn.Sigmoid()
     # sub-branch forward

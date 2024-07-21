@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.nn import Conv2d
 import torch.nn.functional as F
 from models.ffnet.ODConv2d import ODConv2d
+from util.misc import NestedTensor
 
 from ..backbone import build_backbone
 from ..matcher import build_matcher_crowd
@@ -182,7 +183,8 @@ class FFNet2_3(nn.Module):
                                                   num_anchor_points_list=self.num_anchor_points_list)
 
 
-    def forward(self, x):
+    def forward(self, samples: NestedTensor):
+        x = samples.tensors
         pool1, pool2, pool3 = self.backbone(x)
 
         pred_seg_map = self.seg_head(pool1, pool2, pool3)
