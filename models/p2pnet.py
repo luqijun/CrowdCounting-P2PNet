@@ -26,8 +26,8 @@ class P2PNet(nn.Module):
 
         self.regression = RegressionModel(num_features_in=256, num_anchor_points_list=num_anchor_points)
         self.classification = ClassificationModel(num_features_in=256, \
-                                            num_classes=self.num_classes, \
-                                            num_anchor_points_list=num_anchor_points)
+                                                  num_classes=self.num_classes, \
+                                                  num_anchor_points_list=num_anchor_points)
 
         self.anchor_points = AnchorPoints(pyramid_levels=[3,], row=row, line=line)
 

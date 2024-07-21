@@ -179,7 +179,7 @@ class FFNet2_2(nn.Module):
         self.regression = RegressionModel(num_features_in=out_channels, num_anchor_points_list=num_anchor_points)
         self.classification = ClassificationModel(num_features_in=out_channels, \
                                                   num_classes=self.num_classes, \
-                                                  num_anchor_points=num_anchor_points)
+                                                  num_anchor_points_list=num_anchor_points)
 
         self.anchor_points = AnchorPoints(pyramid_levels=[2, ], row=row, line=line)
 
